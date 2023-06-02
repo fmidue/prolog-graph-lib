@@ -1,39 +1,70 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, OverloadedStrings, FlexibleContexts #-}
-module GraphViz where
+module Language.Prolog.GraphViz
+  ( Graph
+  , resolveTree, resolveFirstTree
+  , resolveTreePreview, resolveTreeToFile
+  , asInlineSvg
+  ) where
 
-import Control.Applicative ((<$>), Applicative(..), Alternative(..))
+import Control.Applicative (Alternative)
 import Control.Monad
 import Control.Monad.State
-import Control.Monad.Error
+import Control.Monad.Except
+import Control.Monad.Fix
 import Control.Concurrent (forkIO)
-import Data.List (intercalate, intersperse, nub)
+import Data.List (intercalate, intersperse)
 import Data.Char (ord)
+import qualified Data.ByteString as B (ByteString, hGetContents)
 
-import qualified Data.Graph.Inductive as Graph
--- import Data.HashTable (hashString)
-
-import Data.GraphViz (runGraphvizCommand, runGraphvizCanvas', GraphvizCanvas(Xlib), graphElemsToDot, GraphvizOutput(..), toLabel, nonClusteredParams, GraphvizParams(..), GlobalAttributes(GraphAttrs), GraphvizCommand(Dot))
+import Data.GraphViz
+  ( GraphvizParams(..), GlobalAttributes(GraphAttrs), GraphvizCommand(Dot), GraphvizCanvas(Xlib), GraphvizOutput(..)
+  , runGraphvizCommand, runGraphvizCanvas', graphElemsToDot, toLabel, nonClusteredParams, commandFor, graphvizWithHandle
+  )
 import Data.GraphViz.Attributes.Colors (Color(X11Color), WeightedColor(..))
 import Data.GraphViz.Attributes.Colors.X11 (X11Color(..))
 import Data.GraphViz.Attributes.HTML
-import Data.GraphViz.Attributes.Complete (Attribute(Ordering,Label,Shape,Color,Width,Regular), Shape(BoxShape), Label(HtmlLabel), Order(OutEdges))
+import Data.GraphViz.Attributes.Complete (Attribute(Ordering,Shape,Color,Width,Regular), Shape(BoxShape), Order(OutEdges))
 
 import qualified Data.Text.Lazy
 
 import Language.Prolog
 
+htmlStr :: String -> TextItem
 htmlStr = Str . Data.Text.Lazy.pack
 
+resolveTree :: Program -> [Goal] -> Either String ([Unifier], Graph)
+resolveTree p q = runGraphGenT $ resolve_ p q
+
+resolveFirstTree :: Program -> [Goal] -> Either String (Maybe Unifier, Graph)
+resolveFirstTree p q = do
+  (us,t) <- runGraphGenT $ resolveN_ 1 p q
+  pure $ case us of
+    [] -> (Nothing,t)
+    (x:_) -> (Just x,t)
+
 -- Graphical output of derivation tree
-resolveTree p q = preview =<< execGraphGenT (resolve_ p q)
+resolveTreePreview :: Program -> [Goal] -> IO ()
+resolveTreePreview p q = do
+  case resolveTree p q of
+    Left e -> error e
+    Right (_,g) -> preview g
 
+resolveTreeToFile :: FilePath -> Program -> [Goal] -> IO FilePath
 resolveTreeToFile path p q = do
- graph <- execGraphGenT (resolve_ p q)
- runGraphvizCommand Dot (toDot [] graph) Png path
+ case resolveTree p q of
+   Left e -> error e
+   Right (_,graph) -> runGraphvizCommand Dot (toDot [] graph) Png path
 
+preview :: Gr NodeLabel EdgeLabel -> IO ()
 preview g = ign $ forkIO (ign $ runGraphvizCanvas' (toDot [] g) Xlib)
   where
     ign = (>> return ())
+
+asInlineSvg :: Graph -> IO B.ByteString
+asInlineSvg graph =
+  graphvizWithHandle (commandFor dot) dot Svg B.hGetContents
+  where
+    dot = toDot [] graph
 
 toDot attrs g = graphElemsToDot params (labNodes g) (labEdges g)
   where
@@ -63,8 +94,11 @@ labEdges (Gr _ es) = es
 
 
 newtype GraphGenT m a = GraphGenT (StateT Graph m a) deriving (Monad, Functor, MonadFix, MonadPlus, Applicative, MonadError e, MonadState Graph, MonadTrans, Alternative)
-runGraphGenT  (GraphGenT st) = runStateT  st GraphViz.empty
-execGraphGenT (GraphGenT st) = execStateT st GraphViz.empty
+
+runGraphGenT :: GraphGenT m a -> m (a, Graph)
+runGraphGenT  (GraphGenT st) = runStateT st empty
+execGraphGenT :: Monad m => GraphGenT m a -> m Graph
+execGraphGenT (GraphGenT st) = execStateT st empty
 
 
 instance Monad m => MonadGraphGen (GraphGenT m) where
@@ -110,7 +144,7 @@ formatNode ((_,(_,u',[])), _, WasNotCut) = -- Success
           , Data.GraphViz.Attributes.Complete.Color [(WC (X11Color Green) Nothing)]
           ]
 formatNode ((_,(_,_,gs')), [], WasNotCut) = -- Failure
-    [ toLabel $ colorize Red [htmlGoals gs'] 
+    [ toLabel $ colorize Red [htmlGoals gs']
     , Data.GraphViz.Attributes.Complete.Color [(WC (X11Color Red) Nothing)]
     ]
 formatNode ((_,(_,_,gs')), _, WasNotCut) =

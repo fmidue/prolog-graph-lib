@@ -1,25 +1,39 @@
-Name:                prolog-graph-lib
-Version:             0.2.1.1
-Synopsis:            Generating images of resolution trees for Prolog queries.
-Description:         This is the library part (See <http://hackage.haskell.org/package/prolog-graph> for the command line tool).
-License:             PublicDomain
-Author:              Matthias Bartsch
-Maintainer:          Marcel Fourné (haskell@marcelfourne.de)
-Category:            Language
-Build-type:          Simple
-Cabal-version:       >=1.6
+cabal-version: 1.12
 
-Library
-  Exposed-Modules: Language.Prolog.GraphViz
-  Other-Modules: GraphViz
-  Build-depends:
-    prolog >= 0.2.1,
-    base >=4 && <5,
-    fgl >= 5.4.2.4,
-    mtl >= 2.0.1.0,
-    text >= 0.11.1.5,
-    graphviz >= 2999.12.0.3
+-- This file has been generated from package.yaml by hpack version 0.35.1.
+--
+-- see: https://github.com/sol/hpack
+
+name:           prolog-graph-lib
+version:        0.3.0.0
+synopsis:       Generating images of resolution trees for Prolog queries.
+description:    This is the library part (See <http://hackage.haskell.org/package/prolog-graph> for the command line tool).
+category:       Language
+homepage:       https://github.com/fmidue/prolog-graph-lib#readme
+bug-reports:    https://github.com/fmidue/prolog-graph-lib/issues
+author:         Matthias Bartsch
+maintainer:     Oliver Westphal (oliver.westphal <at> uni-due.de)
+license:        PublicDomain
+build-type:     Simple
 
 source-repository head
   type: git
-  location: https://github.com/mfourne/prolog-graph-lib
+  location: https://github.com/fmidue/prolog-graph-lib
+
+library
+  exposed-modules:
+      Language.Prolog.GraphViz
+  other-modules:
+      Paths_prolog_graph_lib
+  hs-source-dirs:
+      src
+  ghc-options: -Wall
+  build-depends:
+      base ==4.*
+    , bytestring
+    , fgl >=5.4.2.4
+    , graphviz >=2999.12.0.3
+    , mtl >=2.0.1.0
+    , prolog >=0.2.1
+    , text >=0.11.1.5
+  default-language: Haskell2010
