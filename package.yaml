@@ -25,3 +25,18 @@ library:
   source-dirs: src
   exposed-modules:
     - Language.Prolog.GraphViz
+
+executables:
+  prolog-graph:
+    source-dirs: prolog-graph
+    main: Main.hs
+    ghc-options:
+    - -O2
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - prolog-graph-lib
+    - cmdargs >= 0.8
+
+
