@@ -1,10 +1,13 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, OverloadedStrings, FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
 module Language.Prolog.GraphViz
   ( Graph
   , resolveTree, resolveFirstTree
   , resolveTreePreview, resolveTreeToFile
-  , asInlineSvg
+  , GraphFormatting(..), defaultFormatting
+  , resolveTreePreviewWith, resolveTreeToFileWith
+  , asInlineSvg, asInlineSvgWith
   ) where
 
 import Control.Applicative (Alternative)
@@ -18,7 +21,6 @@ import Control.Monad.State
       StateT(..) )
 import Control.Monad.Except ( MonadError )
 import Control.Concurrent (forkIO)
-import Data.List (intercalate, intersperse)
 import Data.Char (ord)
 import qualified Data.ByteString as B (ByteString, hGetContents)
 
@@ -29,16 +31,12 @@ import Data.GraphViz
 import Data.GraphViz.Attributes.Colors (Color(X11Color), WeightedColor(..))
 import Data.GraphViz.Attributes.Colors.X11 (X11Color(..))
 import Data.GraphViz.Attributes.HTML as HTML
-  ( Attribute(Color, PointSize), Text, TextItem(Font, Str, Newline) )
+  ( Attribute(Color, PointSize), Text, TextItem(Font) )
 import Data.GraphViz.Attributes.Complete as Complete
   ( Attribute(Ordering,Shape,Color,Width,Regular), Shape(BoxShape), Order(OutEdges))
 
-import qualified Data.Text.Lazy
-
 import Language.Prolog
-
-htmlStr :: String -> TextItem
-htmlStr = Str . Data.Text.Lazy.pack
+import Language.Prolog.GraphViz.Format (GraphFormatting (..), defaultFormatting)
 
 resolveTree :: Program -> [Goal] -> Either String ([Unifier], Graph)
 resolveTree p q = runGraphGenT $ resolve_ p q
@@ -52,33 +50,43 @@ resolveFirstTree p q = do
 
 -- Graphical output of derivation tree
 resolveTreePreview :: Program -> [Goal] -> IO ()
-resolveTreePreview p q = do
-  case resolveTree p q of
-    Left e -> error e
-    Right (_,g) -> preview g
+resolveTreePreview = resolveTreePreviewWith defaultFormatting
 
 resolveTreeToFile :: FilePath -> Program -> [Goal] -> IO FilePath
-resolveTreeToFile path p q = do
+resolveTreeToFile = resolveTreeToFileWith defaultFormatting
+
+asInlineSvg :: Graph -> IO B.ByteString
+asInlineSvg = asInlineSvgWith defaultFormatting
+
+-- Graphical output with custom formatting
+resolveTreePreviewWith :: GraphFormatting ->  Program -> [Goal] -> IO ()
+resolveTreePreviewWith formatting p q = do
+  case resolveTree p q of
+    Left e -> error e
+    Right (_,g) -> preview formatting g
+
+resolveTreeToFileWith :: GraphFormatting ->  FilePath -> Program -> [Goal] -> IO FilePath
+resolveTreeToFileWith formatting path p q = do
  case resolveTree p q of
    Left e -> error e
-   Right (_,graph) -> runGraphvizCommand Dot (toDot [] graph) Png path
+   Right (_,graph) -> runGraphvizCommand Dot (toDot formatting [] graph) Png path
 
-preview :: Gr NodeLabel EdgeLabel -> IO ()
-preview g = ign $ forkIO (ign $ runGraphvizCanvas' (toDot [] g) Xlib)
+preview :: GraphFormatting ->  Gr NodeLabel EdgeLabel -> IO ()
+preview formatting g = ign $ forkIO (ign $ runGraphvizCanvas' (toDot formatting [] g) Xlib)
   where
     ign = (>> return ())
 
-asInlineSvg :: Graph -> IO B.ByteString
-asInlineSvg graph =
+asInlineSvgWith :: GraphFormatting -> Graph -> IO B.ByteString
+asInlineSvgWith formatting graph =
   graphvizWithHandle (commandFor dot) dot Svg B.hGetContents
   where
-    dot = toDot [] graph
+    dot = toDot formatting [] graph
 
-toDot :: [Complete.Attribute] -> Gr NodeLabel EdgeLabel -> DotGraph Int
-toDot attrs g = graphElemsToDot params (labNodes g) (labEdges g)
+toDot :: GraphFormatting -> [Complete.Attribute] -> Gr NodeLabel EdgeLabel -> DotGraph Int
+toDot formatting attrs g = graphElemsToDot params (labNodes g) (labEdges g)
   where
-    params = nonClusteredParams { fmtNode = \ (_,l) -> formatNode l
-                                , fmtEdge = \ (_, _, l) -> formatEdge l
+    params = nonClusteredParams { fmtNode = \ (_,l) -> formatNode formatting l
+                                , fmtEdge = \ (_, _, l) -> formatEdge formatting l
                                 , globalAttributes = [GraphAttrs (Ordering OutEdges : attrs)] -- child nodes are drawn in edge-order
                                 , isDirected = True
                                 }
@@ -124,7 +132,6 @@ execGraphGenT (GraphGenT st) = execStateT st empty
 
 
 instance Monad m => MonadGraphGen (GraphGenT m) where
-
    createConnections currentBranch@(path,_,_) protoBranches branches = do
       let current = hash path
       -- Ensure node is present (FIXME Why do we do this?)
@@ -153,8 +160,8 @@ data CutFlag = WasNotCut | WasCut
 
 
 
-formatNode :: NodeLabel -> [Complete.Attribute]
-formatNode ((_,(_,u',[])), _, WasNotCut) = -- Success
+formatNode :: GraphFormatting -> NodeLabel -> [Complete.Attribute]
+formatNode GraphFormatting{..} ((_,(_,u',[])), _, WasNotCut) = -- Success
   Shape BoxShape :
   case filterOriginal u' of
     [] -> [ toLabel ("" :: String)
@@ -162,16 +169,17 @@ formatNode ((_,(_,u',[])), _, WasNotCut) = -- Success
           , Regular True
           , Complete.Color [WC (X11Color Green) Nothing]
           ]
-    uf -> [ toLabel $ colorize Green $ htmlUnifier uf
+    uf -> [ toLabel $ colorize Green $ formatSolution uf
           , Complete.Color [WC (X11Color Green) Nothing]
           ]
-formatNode ((_,(_,_,gs')), [], WasNotCut) = -- Failure
-    [ toLabel $ colorize Red [htmlGoals gs']
+formatNode GraphFormatting{..} ((_,(_,_,gs')), [], WasNotCut) = -- Failure
+    [ Shape BoxShape
+    , toLabel $ colorize Red [formatGoals gs']
     , Complete.Color [WC (X11Color Red) Nothing]
     ]
-formatNode ((_,(_,_,gs')), _, WasNotCut) =
-    [ toLabel [htmlGoals gs'] ]
-formatNode ((_,(_,u',[])), _, WasCut) = -- Cut with Succees
+formatNode GraphFormatting{..} ((_,(_,_,gs')), _, WasNotCut) =
+    [ Shape BoxShape, toLabel [formatGoals gs'] ]
+formatNode GraphFormatting{..} ((_,(_,u',[])), _, WasCut) = -- Cut with Succees
   Shape BoxShape :
   case filterOriginal u' of
     [] -> [ toLabel ("" :: String)
@@ -179,28 +187,22 @@ formatNode ((_,(_,u',[])), _, WasCut) = -- Cut with Succees
           , Regular True
           , Complete.Color [WC (X11Color Gray) Nothing]
           ]
-    uf -> [ toLabel $ colorize Gray $ htmlUnifier uf
+    uf -> [ toLabel $ colorize Gray $ formatUnifier uf
           , Complete.Color [WC (X11Color Gray) Nothing]
           ]
-formatNode ((_,(_,_,gs')), _, WasCut) = -- Cut
-    [ toLabel $ colorize Gray [htmlGoals gs']
+formatNode GraphFormatting{..} ((_,(_,_,gs')), _, WasCut) = -- Cut
+    [ Shape BoxShape
+    , toLabel $ colorize Gray [formatGoals gs']
     , Complete.Color [WC (X11Color Gray) Nothing]
     ]
 
 
-formatEdge :: EdgeLabel -> [Complete.Attribute]
-formatEdge ((_,u ,_),_)  =
-    [ toLabel [Font [PointSize 8] $ htmlUnifier $ simplify u] ]
+formatEdge :: GraphFormatting -> EdgeLabel -> [Complete.Attribute]
+formatEdge GraphFormatting{..} ((_,u ,_),_)  =
+    [ toLabel [Font [PointSize 8] $ formatUnifier $ simplify u] ]
 
 simplify :: [Substitution] -> Unifier
 simplify = ([] +++)
-
-htmlGoals :: [Term] -> TextItem
-htmlGoals = htmlStr . intercalate "," . map show
-
-htmlUnifier :: (Show a1, Show a2) => [(a1, a2)] -> [TextItem]
-htmlUnifier [] = [htmlStr " "]
-htmlUnifier u  = intersperse (Newline []) [ htmlStr $ show v ++ " = " ++ show t | (v,t) <- u ]
 
 modifyLabel :: MonadState (Gr a b) m => Int -> (a -> a) -> m ()
 modifyLabel node f =
