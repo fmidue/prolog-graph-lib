@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, OverloadedStrings, FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 module Language.Prolog.GraphViz
   ( Graph
   , resolveTree, resolveFirstTree
@@ -9,8 +10,13 @@ module Language.Prolog.GraphViz
 import Control.Applicative (Alternative)
 import Control.Monad
 import Control.Monad.State
-import Control.Monad.Except
-import Control.Monad.Fix
+    ( MonadFix,
+      modify,
+      execStateT,
+      MonadState,
+      MonadTrans,
+      StateT(..) )
+import Control.Monad.Except ( MonadError )
 import Control.Concurrent (forkIO)
 import Data.List (intercalate, intersperse)
 import Data.Char (ord)
@@ -18,12 +24,14 @@ import qualified Data.ByteString as B (ByteString, hGetContents)
 
 import Data.GraphViz
   ( GraphvizParams(..), GlobalAttributes(GraphAttrs), GraphvizCommand(Dot), GraphvizCanvas(Xlib), GraphvizOutput(..)
-  , runGraphvizCommand, runGraphvizCanvas', graphElemsToDot, toLabel, nonClusteredParams, commandFor, graphvizWithHandle
+  , runGraphvizCommand, runGraphvizCanvas', graphElemsToDot, toLabel, nonClusteredParams, commandFor, graphvizWithHandle, DotGraph
   )
 import Data.GraphViz.Attributes.Colors (Color(X11Color), WeightedColor(..))
 import Data.GraphViz.Attributes.Colors.X11 (X11Color(..))
-import Data.GraphViz.Attributes.HTML
-import Data.GraphViz.Attributes.Complete (Attribute(Ordering,Shape,Color,Width,Regular), Shape(BoxShape), Order(OutEdges))
+import Data.GraphViz.Attributes.HTML as HTML
+  ( Attribute(Color, PointSize), Text, TextItem(Font, Str, Newline) )
+import Data.GraphViz.Attributes.Complete as Complete
+  ( Attribute(Ordering,Shape,Color,Width,Regular), Shape(BoxShape), Order(OutEdges))
 
 import qualified Data.Text.Lazy
 
@@ -66,6 +74,7 @@ asInlineSvg graph =
   where
     dot = toDot [] graph
 
+toDot :: [Complete.Attribute] -> Gr NodeLabel EdgeLabel -> DotGraph Int
 toDot attrs g = graphElemsToDot params (labNodes g) (labEdges g)
   where
     params = nonClusteredParams { fmtNode = \ (_,l) -> formatNode l
@@ -84,12 +93,25 @@ type ProtoBranch = Branch
 
 data Gr a b = Gr [(Int,a)] [(Int, Int, b)] deriving Show
 
+empty :: Gr a b
 empty = Gr [] []
+
+insEdge :: (Int, Int, b) -> Gr a b -> Gr a b
 insEdge edge (Gr ns es) = Gr ns (es ++ [edge])
+
+insNode :: (Int, a) -> Gr a b -> Gr a b
 insNode node (Gr ns es) = Gr (ns ++ [node]) es
+
+gelem :: Int -> Gr a b -> Bool
 gelem n (Gr ns es) = n `elem` map fst ns
+
+relabelNode :: (a -> a) -> Int -> Gr a b -> Gr a b
 relabelNode f node (Gr ns es) = Gr (map (\(n,l) -> (n,if n == node then f l else l)) ns) es
+
+labNodes :: Gr a b -> [(Int, a)]
 labNodes (Gr ns _) = ns
+
+labEdges :: Gr a b -> [(Int, Int, b)]
 labEdges (Gr _ es) = es
 
 
@@ -131,21 +153,21 @@ data CutFlag = WasNotCut | WasCut
 
 
 
-formatNode :: NodeLabel -> [Data.GraphViz.Attributes.Complete.Attribute]
+formatNode :: NodeLabel -> [Complete.Attribute]
 formatNode ((_,(_,u',[])), _, WasNotCut) = -- Success
   Shape BoxShape :
   case filterOriginal u' of
     [] -> [ toLabel ("" :: String)
-          , Data.GraphViz.Attributes.Complete.Width 0.2
+          , Complete.Width 0.2
           , Regular True
-          , Data.GraphViz.Attributes.Complete.Color [(WC (X11Color Green) Nothing)]
+          , Complete.Color [WC (X11Color Green) Nothing]
           ]
     uf -> [ toLabel $ colorize Green $ htmlUnifier uf
-          , Data.GraphViz.Attributes.Complete.Color [(WC (X11Color Green) Nothing)]
+          , Complete.Color [WC (X11Color Green) Nothing]
           ]
 formatNode ((_,(_,_,gs')), [], WasNotCut) = -- Failure
     [ toLabel $ colorize Red [htmlGoals gs']
-    , Data.GraphViz.Attributes.Complete.Color [(WC (X11Color Red) Nothing)]
+    , Complete.Color [WC (X11Color Red) Nothing]
     ]
 formatNode ((_,(_,_,gs')), _, WasNotCut) =
     [ toLabel [htmlGoals gs'] ]
@@ -153,41 +175,51 @@ formatNode ((_,(_,u',[])), _, WasCut) = -- Cut with Succees
   Shape BoxShape :
   case filterOriginal u' of
     [] -> [ toLabel ("" :: String)
-          , Data.GraphViz.Attributes.Complete.Width 0.2
+          , Complete.Width 0.2
           , Regular True
-          , Data.GraphViz.Attributes.Complete.Color [(WC (X11Color Gray) Nothing)]
+          , Complete.Color [WC (X11Color Gray) Nothing]
           ]
     uf -> [ toLabel $ colorize Gray $ htmlUnifier uf
-          , Data.GraphViz.Attributes.Complete.Color [(WC (X11Color Gray) Nothing)]
+          , Complete.Color [WC (X11Color Gray) Nothing]
           ]
 formatNode ((_,(_,_,gs')), _, WasCut) = -- Cut
     [ toLabel $ colorize Gray [htmlGoals gs']
-    , Data.GraphViz.Attributes.Complete.Color [(WC (X11Color Gray) Nothing)]
+    , Complete.Color [WC (X11Color Gray) Nothing]
     ]
 
 
-formatEdge :: EdgeLabel -> [Data.GraphViz.Attributes.Complete.Attribute]
+formatEdge :: EdgeLabel -> [Complete.Attribute]
 formatEdge ((_,u ,_),_)  =
     [ toLabel [Font [PointSize 8] $ htmlUnifier $ simplify u] ]
 
+simplify :: [Substitution] -> Unifier
 simplify = ([] +++)
 
+htmlGoals :: [Term] -> TextItem
 htmlGoals = htmlStr . intercalate "," . map show
 
+htmlUnifier :: (Show a1, Show a2) => [(a1, a2)] -> [TextItem]
 htmlUnifier [] = [htmlStr " "]
 htmlUnifier u  = intersperse (Newline []) [ htmlStr $ show v ++ " = " ++ show t | (v,t) <- u ]
 
+modifyLabel :: MonadState (Gr a b) m => Int -> (a -> a) -> m ()
 modifyLabel node f =
    modify $ relabelNode f node
 
-colorize color label = [Font [Data.GraphViz.Attributes.HTML.Color (X11Color color)] label]
+colorize :: X11Color -> Text -> [TextItem]
+colorize color label = [Font [HTML.Color (X11Color color)] label]
 
 hash :: Path -> Int
 -- TODO This is a complicated way to hash a list of integers.
 --      Also, a unique hash value would be nice to avoid collisions.
 hash = fromEnum . hashString . show
 
-filterOriginal = filter $ \(VariableName n _, _) -> n == 0
+filterOriginal :: [(VariableName, b)] -> [(VariableName, b)]
+filterOriginal =
+  filter $ \case
+    (VariableName n _, _) -> n == 0
+    (Wildcard _, _) -> False
 
+hashString :: [Char] -> Integer
 hashString = fromIntegral . foldr f 0
   where f c m = ord c + (m * 128) `rem` 1500007

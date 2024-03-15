@@ -20,7 +20,8 @@ dependencies:
 
 ghc-options:
   - -Wall
-
+  - -Wincomplete-uni-patterns
+  - -Werror=incomplete-uni-patterns
 library:
   source-dirs: src
   exposed-modules:
@@ -37,6 +38,7 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - prolog-graph-lib
+    - parsec
     - cmdargs >= 0.8
 
 
