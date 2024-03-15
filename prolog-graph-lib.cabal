@@ -23,8 +23,8 @@ source-repository head
 library
   exposed-modules:
       Language.Prolog.GraphViz
+      Language.Prolog.GraphViz.Formatting
   other-modules:
-      Language.Prolog.GraphViz.Format
       Paths_prolog_graph_lib
   hs-source-dirs:
       src

@@ -1,4 +1,4 @@
-module Language.Prolog.GraphViz.Format
+module Language.Prolog.GraphViz.Formatting
   ( GraphFormatting(..)
   , defaultFormatting
   , queryStyle, resolutionStyle

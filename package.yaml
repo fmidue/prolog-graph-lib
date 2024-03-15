@@ -27,6 +27,7 @@ library:
   source-dirs: src
   exposed-modules:
     - Language.Prolog.GraphViz
+    - Language.Prolog.GraphViz.Formatting
 
 executables:
   prolog-graph:

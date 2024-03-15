@@ -36,7 +36,7 @@ import Data.GraphViz.Attributes.Complete as Complete
   ( Attribute(Ordering,Shape,Color,Width,Regular), Shape(BoxShape), Order(OutEdges))
 
 import Language.Prolog
-import Language.Prolog.GraphViz.Format (GraphFormatting (..), defaultFormatting)
+import Language.Prolog.GraphViz.Formatting (GraphFormatting (..), defaultFormatting)
 
 resolveTree :: Program -> [Goal] -> Either String ([Unifier], Graph)
 resolveTree p q = runGraphGenT $ resolve_ p q
