@@ -12,9 +12,9 @@ module Language.Prolog.GraphViz
 
 import Control.Applicative (Alternative)
 import Control.Monad
+import Control.Monad.Fix (MonadFix)
 import Control.Monad.State
-    ( MonadFix,
-      modify,
+    ( modify,
       execStateT,
       MonadState,
       MonadTrans,
