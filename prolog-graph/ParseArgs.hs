@@ -11,6 +11,7 @@ data Options = Options
    , file  :: [String]
    , output :: String
    , positional :: [String]
+   , first_result :: Bool
    }
   deriving (Data, Typeable)
 
@@ -19,6 +20,7 @@ options = Options
   , file   = def &= typ "FILE"  &= help "Consult file before executing query"
   , output = "graph.png" &= typ "FILE"  &= help "Save generated image to file (default: 'graph.png')"
   , positional = def &= args &= typ "QUERY [FILE]..."
+  , first_result = def &= help "Resolve only until the first success"
   }
   &= versionArg [ignore]
   &= helpArg [name "h"]
@@ -26,6 +28,6 @@ options = Options
 parseArgs = do
    opts <- getProgName >>= cmdArgs . ((options &=) . program)
    return $ case opts of
-      Options q fs o []      -> (q, fs,      o)
-      Options _ fs o [q]     -> (q, fs,      o)
-      Options _ fs o (q:fs') -> (q, fs++fs', o)
+      Options q fs o []      b -> (q, fs,      o,b)
+      Options _ fs o [q]     b -> (q, fs,      o,b)
+      Options _ fs o (q:fs') b -> (q, fs++fs', o,b)

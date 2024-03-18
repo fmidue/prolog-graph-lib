@@ -5,6 +5,7 @@ module Language.Prolog.GraphViz
   ( Graph
   , resolveTree, resolveFirstTree
   , resolveTreePreview, resolveTreeToFile
+  , resolveFirstTreePreview, resolveFirstTreeToFile
   , GraphFormatting(..), defaultFormatting
   , resolveTreePreviewWith, resolveTreeToFileWith
   , asInlineSvg, asInlineSvgWith
@@ -52,22 +53,36 @@ resolveFirstTree p q = do
 resolveTreePreview :: Program -> [Goal] -> IO ()
 resolveTreePreview = resolveTreePreviewWith defaultFormatting
 
+resolveFirstTreePreview :: Program -> [Goal] -> IO ()
+resolveFirstTreePreview = resolveTreePreviewWith' resolveFirstTree defaultFormatting
+
 resolveTreeToFile :: FilePath -> Program -> [Goal] -> IO FilePath
 resolveTreeToFile = resolveTreeToFileWith defaultFormatting
+
+resolveFirstTreeToFile :: FilePath -> Program -> [Goal] -> IO FilePath
+resolveFirstTreeToFile = resolveTreeToFileWith' resolveFirstTree defaultFormatting
 
 asInlineSvg :: Graph -> IO B.ByteString
 asInlineSvg = asInlineSvgWith defaultFormatting
 
 -- Graphical output with custom formatting
 resolveTreePreviewWith :: GraphFormatting ->  Program -> [Goal] -> IO ()
-resolveTreePreviewWith formatting p q = do
-  case resolveTree p q of
+resolveTreePreviewWith = resolveTreePreviewWith' resolveTree
+
+type Resolver a = Program -> [Goal] -> Either [Char] (a, Gr NodeLabel EdgeLabel)
+
+resolveTreePreviewWith' :: Resolver a -> GraphFormatting ->  Program -> [Goal] -> IO ()
+resolveTreePreviewWith' resolver formatting p q = do
+  case resolver p q of
     Left e -> error e
     Right (_,g) -> preview formatting g
 
 resolveTreeToFileWith :: GraphFormatting ->  FilePath -> Program -> [Goal] -> IO FilePath
-resolveTreeToFileWith formatting path p q = do
- case resolveTree p q of
+resolveTreeToFileWith = resolveTreeToFileWith' resolveTree
+
+resolveTreeToFileWith' :: Resolver a -> GraphFormatting ->  FilePath -> Program -> [Goal] -> IO FilePath
+resolveTreeToFileWith' resolver formatting path p q = do
+ case resolver p q of
    Left e -> error e
    Right (_,graph) -> runGraphvizCommand Dot (toDot formatting [] graph) Png path
 
@@ -92,7 +107,7 @@ toDot formatting attrs g = graphElemsToDot params (labNodes g) (labEdges g)
                                 }
 
 type Graph = Gr NodeLabel EdgeLabel
-type NodeLabel = ((ProtoBranch, Branch), [Branch], CutFlag)
+type NodeLabel = ((ProtoBranch, Branch), [Branch], CutFlag,VisitedFlag)
 type EdgeLabel = (ProtoBranch, Branch)
 type Branch = (Path, [(VariableName, Term)], [Term])
 type Path = [Integer]
@@ -136,7 +151,7 @@ instance Monad m => MonadGraphGen (GraphGenT m) where
       let current = hash path
       -- Ensure node is present (FIXME Why do we do this?)
       let protoBranch = error "Unknown protobranch accessed during graph generation"
-      let label = ((protoBranch, currentBranch), branches, WasNotCut)
+      let label = ((protoBranch, currentBranch), branches, WasNotCut,Visited)
       modify $ \graph ->
           if gelem current graph
              then relabelNode (const label) current graph
@@ -144,7 +159,7 @@ instance Monad m => MonadGraphGen (GraphGenT m) where
       -- Create nodes and edges to them
       forM_ (zip protoBranches branches) $ \x@(_,(pathOfTarget,_,_))-> do
         let new = hash pathOfTarget
-        modify $ insNode (new, (x, [], WasNotCut))
+        modify $ insNode (new, (x, [], WasNotCut,GoalNotVisited))
         modify $ insEdge (current, new, x)
 
    markSolution usf = do
@@ -154,14 +169,14 @@ instance Monad m => MonadGraphGen (GraphGenT m) where
       forM_ stackPrefix $ \((path_,u_,gs_),alts_) -> do
          forM_ alts_ $ \(pathOfChild,_,_) -> do
             let child = hash pathOfChild
-            modifyLabel child $ \(t,b,_) -> (t,b,WasCut)
+            modifyLabel child $ \(t,b,_,_) -> (t,b,WasCut,GoalNotVisited)
 
 data CutFlag = WasNotCut | WasCut
-
+data VisitedFlag = GoalNotVisited | Visited
 
 
 formatNode :: GraphFormatting -> NodeLabel -> [Complete.Attribute]
-formatNode GraphFormatting{..} ((_,(_,u',[])), _, WasNotCut) = -- Success
+formatNode GraphFormatting{..} ((_,(_,u',[])), _, WasNotCut,_) = -- Success
   Shape BoxShape :
   case filterOriginal u' of
     [] -> [ toLabel ("" :: String)
@@ -172,14 +187,19 @@ formatNode GraphFormatting{..} ((_,(_,u',[])), _, WasNotCut) = -- Success
     uf -> [ toLabel $ colorize Green $ formatSolution uf
           , Complete.Color [WC (X11Color Green) Nothing]
           ]
-formatNode GraphFormatting{..} ((_,(_,_,gs')), [], WasNotCut) = -- Failure
+formatNode GraphFormatting{..} ((_,(_,_,gs')), [], WasNotCut,GoalNotVisited) = -- Not visited
+    [ Shape BoxShape
+    , toLabel $ colorize Orange [formatGoals gs']
+    , Complete.Color [WC (X11Color Orange) Nothing]
+    ]
+formatNode GraphFormatting{..} ((_,(_,_,gs')), [], WasNotCut,_) = -- Failure
     [ Shape BoxShape
     , toLabel $ colorize Red [formatGoals gs']
     , Complete.Color [WC (X11Color Red) Nothing]
     ]
-formatNode GraphFormatting{..} ((_,(_,_,gs')), _, WasNotCut) =
+formatNode GraphFormatting{..} ((_,(_,_,gs')), _, WasNotCut,_) =
     [ Shape BoxShape, toLabel [formatGoals gs'] ]
-formatNode GraphFormatting{..} ((_,(_,u',[])), _, WasCut) = -- Cut with Succees
+formatNode GraphFormatting{..} ((_,(_,u',[])), _, WasCut,_) = -- Cut with Succees
   Shape BoxShape :
   case filterOriginal u' of
     [] -> [ toLabel ("" :: String)
@@ -190,7 +210,7 @@ formatNode GraphFormatting{..} ((_,(_,u',[])), _, WasCut) = -- Cut with Succees
     uf -> [ toLabel $ colorize Gray $ formatUnifier uf
           , Complete.Color [WC (X11Color Gray) Nothing]
           ]
-formatNode GraphFormatting{..} ((_,(_,_,gs')), _, WasCut) = -- Cut
+formatNode GraphFormatting{..} ((_,(_,_,gs')), _, WasCut,_) = -- Cut
     [ Shape BoxShape
     , toLabel $ colorize Gray [formatGoals gs']
     , Complete.Color [WC (X11Color Gray) Nothing]
