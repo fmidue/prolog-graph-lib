@@ -4,3 +4,4 @@ cd prolog-graph-lib
 stack build
 stack exec prolog-graph -- --help
 ```
+Make sure you have [GraphViz](https://graphviz.org/download/) installed on your system.
