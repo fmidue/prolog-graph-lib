@@ -55,12 +55,11 @@ goalSet :: [Goal] -> TextItem
 goalSet xs = textItem $
   "{"++ intercalate ", " (map format xs) ++"}"
   where
-    format term = case term of
-      Struct "false" _ -> "false"
-      -- contains operator
-      Struct (c:_) _
-        | not (isAlphaNum c) -> "¬(" ++ show term ++ ")"
-      _ -> "¬" ++ show term
+    format (Struct "false" _) = "false"
+    -- contains operator
+    format term@(Struct (c:_) _)
+      | not (isAlphaNum c) = "¬(" ++ show term ++ ")"
+    format term = "¬" ++ show term
 
 goalQuery :: [Goal] -> TextItem
 goalQuery xs = textItem $
