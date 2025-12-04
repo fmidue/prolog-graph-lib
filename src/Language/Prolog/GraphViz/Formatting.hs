@@ -5,7 +5,8 @@ module Language.Prolog.GraphViz.Formatting
   , legacyStyle
   ) where
 
-import Language.Prolog (Unifier, Goal)
+import Language.Prolog (Unifier, Goal, Term(Struct))
+import Data.Char (isAlphaNum)
 import Data.GraphViz.Attributes.HTML (TextItem (..))
 import qualified Data.Text.Lazy
 import Data.List (intercalate, intersperse)
@@ -52,7 +53,14 @@ resolutionStyle = GraphFormatting
 
 goalSet :: [Goal] -> TextItem
 goalSet xs = textItem $
-  "{"++ intercalate ", " (("¬"++). show <$> xs) ++"}"
+  "{"++ intercalate ", " (map format xs) ++"}"
+  where
+    format term = case term of
+      Struct "false" _ -> "false"
+      -- contains operator
+      Struct (c:_) _
+        | not (isAlphaNum c) -> "¬(" ++ show term ++ ")"
+      _ -> "¬" ++ show term
 
 goalQuery :: [Goal] -> TextItem
 goalQuery xs = textItem $
