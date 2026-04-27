@@ -4,9 +4,9 @@
 module Language.Prolog.GraphViz
   ( Graph
   , resolveTree, resolveFirstTree
-  , resolveTreePreview, resolveTreeToFile
-  , resolveFirstTreePreview, resolveFirstTreeToFile
-  , GraphFormatting(..), defaultFormatting
+  , resolveTreePreview
+  , resolveFirstTreePreview, resolveFirstTreeToFileWith
+  , GraphFormatting(..), defaultFormatting, resolutionStyle
   , resolveTreePreviewWith, resolveTreeToFileWith
   , asInlineSvg, asInlineSvgWith
   ) where
@@ -37,7 +37,7 @@ import Data.GraphViz.Attributes.Complete as Complete
   ( Attribute(Ordering,Shape,Color,Width,Regular), Shape(BoxShape), Order(OutEdges))
 
 import Language.Prolog
-import Language.Prolog.GraphViz.Formatting (GraphFormatting (..), defaultFormatting)
+import Language.Prolog.GraphViz.Formatting (GraphFormatting (..), defaultFormatting, resolutionStyle)
 
 resolveTree :: Program -> [Goal] -> Either String ([Unifier], Graph)
 resolveTree p q = runGraphGenT $ resolve_ p q
@@ -56,11 +56,8 @@ resolveTreePreview = resolveTreePreviewWith defaultFormatting
 resolveFirstTreePreview :: Program -> [Goal] -> IO ()
 resolveFirstTreePreview = resolveTreePreviewWith' resolveFirstTree defaultFormatting
 
-resolveTreeToFile :: FilePath -> Program -> [Goal] -> IO FilePath
-resolveTreeToFile = resolveTreeToFileWith defaultFormatting
-
-resolveFirstTreeToFile :: FilePath -> Program -> [Goal] -> IO FilePath
-resolveFirstTreeToFile = resolveTreeToFileWith' resolveFirstTree defaultFormatting
+resolveFirstTreeToFileWith :: GraphFormatting -> FilePath -> Program -> [Goal] -> IO FilePath
+resolveFirstTreeToFileWith = resolveTreeToFileWith' resolveFirstTree
 
 asInlineSvg :: Graph -> IO B.ByteString
 asInlineSvg = asInlineSvgWith defaultFormatting
