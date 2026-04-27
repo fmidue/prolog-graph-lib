@@ -182,20 +182,20 @@ formatNode GraphFormatting{..} ((_,(_,u',[])), _, WasNotCut,_) = -- Success
     [] -> [ toLabel ("" :: String)
           , Complete.Width 0.2
           , Regular True
-          , Complete.Color [WC (X11Color Green) Nothing]
+          , Complete.Color [WC (X11Color ForestGreen) Nothing]
           ]
-    uf -> [ toLabel $ colorize Green $ formatSolution uf
-          , Complete.Color [WC (X11Color Green) Nothing]
+    uf -> [ toLabel $ colorize ForestGreen $ formatSolution uf
+          , Complete.Color [WC (X11Color ForestGreen) Nothing]
           ]
 formatNode GraphFormatting{..} ((_,(_,_,gs')), [], WasNotCut,GoalNotVisited) = -- Not visited
     [ Shape BoxShape
-    , toLabel $ colorize Orange [formatGoals gs']
-    , Complete.Color [WC (X11Color Orange) Nothing]
+    , toLabel $ colorize DarkOrange1 [formatGoals gs']
+    , Complete.Color [WC (X11Color DarkOrange1) Nothing]
     ]
 formatNode GraphFormatting{..} ((_,(_,_,gs')), [], WasNotCut,_) = -- Failure
     [ Shape BoxShape
-    , toLabel $ colorize Red [formatGoals gs']
-    , Complete.Color [WC (X11Color Red) Nothing]
+    , toLabel $ colorize Firebrick [formatGoals gs']
+    , Complete.Color [WC (X11Color Firebrick) Nothing]
     ]
 formatNode GraphFormatting{..} ((_,(_,_,gs')), _, WasNotCut,_) =
     [ Shape BoxShape, toLabel [formatGoals gs'] ]
@@ -205,15 +205,15 @@ formatNode GraphFormatting{..} ((_,(_,u',[])), _, WasCut,_) = -- Cut with Succee
     [] -> [ toLabel ("" :: String)
           , Complete.Width 0.2
           , Regular True
-          , Complete.Color [WC (X11Color Gray) Nothing]
+          , Complete.Color [WC (X11Color SlateGray) Nothing]
           ]
-    uf -> [ toLabel $ colorize Gray $ formatUnifier uf
-          , Complete.Color [WC (X11Color Gray) Nothing]
+    uf -> [ toLabel $ colorize SlateGray $ formatUnifier uf
+          , Complete.Color [WC (X11Color SlateGray) Nothing]
           ]
 formatNode GraphFormatting{..} ((_,(_,_,gs')), _, WasCut,_) = -- Cut
     [ Shape BoxShape
-    , toLabel $ colorize Gray [formatGoals gs']
-    , Complete.Color [WC (X11Color Gray) Nothing]
+    , toLabel $ colorize SlateGray [formatGoals gs']
+    , Complete.Color [WC (X11Color SlateGray) Nothing]
     ]
 
 
