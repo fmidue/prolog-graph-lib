@@ -11,7 +11,7 @@ data Options = Options
    , file  :: [String]
    , output :: String
    , positional :: [String]
-   , setNotation :: Bool
+   , set_notation :: Bool
    , first_result :: Bool
    }
   deriving (Data, Typeable)
@@ -21,7 +21,7 @@ options = Options
   , file   = def &= typ "FILE"  &= help "Consult file before executing query"
   , output = "graph.png" &= typ "FILE"  &= help "Save generated image to file (default: 'graph.png')"
   , positional = def &= args &= typ "QUERY [FILE]..."
-  , setNotation = def &= help "Use set notation (default: Prolog notation)"
+  , set_notation = def &= help "Use set notation (default: Prolog notation)"
   , first_result = def &= help "Resolve only until the first success"
   }
   &= versionArg [ignore]
