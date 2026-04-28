@@ -81,7 +81,7 @@ resolveTreeToFileWith' :: Resolver a -> GraphFormatting ->  FilePath -> Program 
 resolveTreeToFileWith' resolver formatting path p q = do
  case resolver p q of
    Left e -> error e
-   Right (_,graph) -> runGraphvizCommand Dot (toDot formatting [] graph) Png path
+   Right (_,graph) -> runGraphvizCommand Dot (toDot formatting [] graph) Svg path
 
 preview :: GraphFormatting ->  Gr NodeLabel EdgeLabel -> IO ()
 preview formatting g = ign $ forkIO (ign $ runGraphvizCanvas' (toDot formatting [] g) Xlib)

@@ -19,7 +19,7 @@ data Options = Options
 options = Options
   { query  = def &= typ "QUERY" &= help "Set Prolog query (If not set, first positional argument is used)"
   , file   = def &= typ "FILE"  &= help "Consult file before executing query"
-  , output = "graph.png" &= typ "FILE"  &= help "Save generated image to file (default: 'graph.png')"
+  , output = "graph.svg" &= typ "FILE"  &= help "Save generated image to file (default: 'graph.svg')"
   , positional = def &= args &= typ "QUERY [FILE]..."
   , set_notation = def &= help "Use set notation (default: Prolog notation)"
   , first_result = def &= help "Resolve only until the first success"
