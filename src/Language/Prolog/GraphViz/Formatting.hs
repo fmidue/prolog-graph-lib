@@ -67,4 +67,4 @@ goalQuery xs = textItem $
 
 slashUnifier :: Unifier -> [TextItem]
 slashUnifier [] = [textItem " "]
-slashUnifier u = intersperse (Newline []) [ textItem $ show v ++ "/" ++ show t | (v,t) <- u ]
+slashUnifier u = intersperse (Newline []) [ textItem $ show v ++ " / " ++ show t | (v,t) <- u ]
