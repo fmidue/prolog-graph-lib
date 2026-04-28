@@ -5,6 +5,6 @@ packages:
 
 extra-deps:
 - git: https://github.com/fmidue/prolog
-  commit: ae553c07eab85b3e64e5ce85eaac991f1df12499
+  commit: 80df8e8d099c389920ebc0e3c0b10872494283dc
 - fgl-5.8.1.1
 - graphviz-2999.20.1.0 # needed for newest revision
