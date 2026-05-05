@@ -26,8 +26,8 @@ import Data.Char (ord)
 import qualified Data.ByteString as B (ByteString, hGetContents)
 
 import Data.GraphViz
-  ( GraphvizParams(..), GlobalAttributes(GraphAttrs), GraphvizCommand(Dot), GraphvizCanvas(Xlib), GraphvizOutput(..)
-  , runGraphvizCommand, runGraphvizCanvas', graphElemsToDot, toLabel, nonClusteredParams, commandFor, graphvizWithHandle, DotGraph
+  ( DirType(NoDir), GraphvizParams(..), GlobalAttributes(GraphAttrs, EdgeAttrs), GraphvizCommand(Dot), GraphvizCanvas(Xlib), GraphvizOutput(..)
+  , edgeEnds, runGraphvizCommand, runGraphvizCanvas', graphElemsToDot, toLabel, nonClusteredParams, commandFor, graphvizWithHandle, DotGraph
   )
 import Data.GraphViz.Attributes.Colors (Color(X11Color), WeightedColor(..))
 import Data.GraphViz.Attributes.Colors.X11 (X11Color(..))
@@ -99,7 +99,12 @@ toDot formatting attrs g = graphElemsToDot params (labNodes g) (labEdges g)
   where
     params = nonClusteredParams { fmtNode = \ (_,l) -> formatNode formatting l
                                 , fmtEdge = \ (_, _, l) -> formatEdge formatting l
-                                , globalAttributes = [GraphAttrs (Ordering OutEdges : attrs)] -- child nodes are drawn in edge-order
+                                , globalAttributes =
+                                    -- child nodes are drawn in edge-order
+                                    [ GraphAttrs (Ordering OutEdges : attrs)
+                                    -- edges are drawn without an explicit direction
+                                    , EdgeAttrs [edgeEnds NoDir]
+                                    ]
                                 , isDirected = True
                                 }
 
